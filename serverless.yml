@@ -1,0 +1,46 @@
+service: totp-authenticator
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: ap-northeast-1 # 默认部署到东京，可按需修改
+  environment:
+    DYNAMODB_TABLE: ${self:service}-${sls:stage}
+    ADMIN_PASSWORD: "ldm2006818" # ★ 在此修改你的后台密码
+    JWT_SECRET: "u16rPFGVhWP9rHS2wQMp" # 建议修改为随机长字符串
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:DeleteItem
+          Resource: "arn:aws:dynamodb:${aws:region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
+
+functions:
+  app:
+    handler: app.handler
+    events:
+      - http: ANY /
+      - http: 'ANY /{proxy+}'
+
+resources:
+  Resources:
+    TotpTable:
+      Type: 'AWS::DynamoDB::Table'
+      Properties:
+        TableName: ${self:provider.environment.DYNAMODB_TABLE}
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: ttl # 启用 TTL，AWS 会自动清理过期的临时链接
+          Enabled: true
